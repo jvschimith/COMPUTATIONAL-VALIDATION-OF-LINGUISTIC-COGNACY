@@ -5,3 +5,4 @@ networkx
 node2vec
 scikit-learn
 plotly
+setuptools
