@@ -1,272 +1,257 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import networkx as nx
-import plotly.express as px
+import editdistance 
 from node2vec import Node2Vec
 from sklearn.manifold import TSNE
-import gensim
-from gensim.models import Word2Vec
+import plotly.express as px
+from itertools import combinations
+import warnings
 
-# Configuração de Reprodução (Seed)
-# Isso garante que o Node2Vec e o t-SNE gerem resultados consistentes
-@st.cache_data
-def set_seed(seed=42):
-    np.random.seed(seed)
-    # A biblioteca Node2Vec/Gensim usa sua própria seed.
+# --- CONFIGURAÇÃO INICIAL STREAMLIT ---
+st.set_page_config(layout="wide")
+warnings.filterwarnings("ignore") # Ignora warnings
 
 # ----------------------------------------------------------------------
-# 1. DADOS BASE (SIMULADOS)
+# A. DADOS INICIAIS (Defaults para o Editor de Dados)
 # ----------------------------------------------------------------------
 
-# Dados base que simulam a extração manual das tabelas do PDF
-BASE_LANGUAGE_RELATIONS = {
-    'Source': ['Arin', 'Arin', 'Ket', 'Arin', 'Arin', 'Xiongnú', 'Arin', 'Ket'],
-    'Target': ['Ket', 'Yugh', 'Yugh', 'Xiongnú', 'Huns', 'Huns', 'Proto-Turkic', 'Proto-Mongolic'],
-    'Weight': [10, 8, 9, 12, 11, 13, 3, 2] # Peso = Força da Proximidade/Cognato
+# Mapeamento padrão de Famílias para inicializar o sidebar
+DEFAULT_FAMILY_MAPPING = {
+    'Arin': 'Yeniseiana', 
+    'Xiongnú': 'Xiongnú/Huns (Foco)', 
+    'Proto-Turkic': 'Controle (Turkic)', 
+    'Huns': 'Xiongnú/Huns (Foco)', 
+    'Ket': 'Yeniseiana',
+    'Proto-Mongolic': 'Controle (Mongolic)'
+}
+
+# Dados de palavras padrão para inicializar o editor de dados
+DEFAULT_WORDS_DATA = {
+    'Conceito': ['Água', 'Dois', 'Pássaro', 'Fogo', 'Dedo', 'Comer', 'Ovo', 'Mãe', 'Nariz', 'Dente'],
+    'Arin': ['yit', 'kin', 'qun', 'si', 'tū', 'ēsi', 'uśe', 'ami', 'qan', 'qan'],
+    'Xiongnú': ['yyt', 'k’in', 'qun', 'sa', 't\'u', 'ēssi', 'use', 'amy', 'qani', 'qan'],
+    'Proto-Turkic': ['su', 'eki', 'quş', 'ot', 'til', 'ye', 'yumu', 'ana', 'burun', 'tiš'],
+    'Huns': ['yit', 'kin', 'cun', 'se', 'tu', 'esi', 'use', 'amy', 'qan', 'qann'],
+    'Ket': ['u’l', 'qīn', 'qun', 'sī', 'dū', 'e’s', 'ūs', 'amī', 'qan', 'qa'],
+    'Proto-Mongolic': ['usu', 'qoyar', 'šuγ', 'γal', 'urγu', 'ide', 'öndü', 'eke', 'qabar', 'sidü']
 }
 
 # ----------------------------------------------------------------------
-# 2. FUNÇÃO DE PRÉ-PROCESSAMENTO E ANÁLISE (O coração do projeto)
+# B. FUNÇÕES DE PROCESSAMENTO
 # ----------------------------------------------------------------------
 
-# NOTE: Não usaremos @st.cache_resource aqui porque o input (languages_df) agora é dinâmico.
-# A função será re-executada sempre que o DataFrame mudar.
-def run_node2vec_analysis(languages_df):
-    """Executa a criação do grafo, Node2Vec e t-SNE."""
+@st.cache_data
+def calculate_pair_similarity(lang1_series, lang2_series):
+    """Calcula a similaridade média normalizada por edit distance entre duas listas de palavras."""
+    total_similarity_score = 0
+    num_concepts = len(lang1_series)
     
-    # 1. Criação do Grafo NetworkX
+    for word1, word2 in zip(lang1_series, lang2_series):
+        dist = editdistance.eval(word1, word2)
+        max_len = max(len(word1), len(word2), 1) 
+        normalized_similarity = 1 - (dist / max_len)
+        total_similarity_score += normalized_similarity
+        
+    avg_similarity = total_similarity_score / num_concepts
+    # Multiplica por 20 para ter pesos de aresta mais visíveis (escalonamento)
+    final_weight = avg_similarity * 20 
+    
+    return final_weight
+
+
+@st.cache_data
+def generate_weighted_edges(df, languages):
+    """Gera o DataFrame de arestas ponderadas (input para o Node2Vec)."""
+    weighted_edges = []
+    
+    for lang1, lang2 in combinations(languages, 2):
+        # Acessa as colunas de palavras no DataFrame de input
+        weight = calculate_pair_similarity(df[lang1], df[lang2])
+        weighted_edges.append({
+            'Source': lang1,
+            'Target': lang2,
+            'Weight': round(weight, 2)
+        })
+        
+    return pd.DataFrame(weighted_edges)
+
+
+@st.cache_resource
+def run_node2vec_analysis(input_df, family_mapping):
+    """Executa a criação do grafo, Node2Vec e t-SNE."""
+
+    # 1. Grafo
     G = nx.Graph()
-    for index, row in languages_df.iterrows():
-        # Adiciona arestas usando o 'Weight' como peso da aresta
+    for index, row in input_df.iterrows():
         G.add_edge(row['Source'], row['Target'], weight=row['Weight'])
 
-    # Verifica se há nós suficientes para t-SNE
-    if len(G.nodes()) < 2:
-        st.warning("Adicione pelo menos duas relações para criar um grafo válido.")
-        return None
+    # 2. Node2Vec 
+    node2vec = Node2Vec(
+        G,
+        walk_length=20,
+        num_walks=200,
+        p=1, 
+        q=1,
+        weight_key='weight',
+        workers=4 # Define o número de threads
+    )
 
-    # 2. Treinamento do Node2Vec
-    node2vec = Node2Vec(G,
-                        dimensions=64,
-                        walk_length=20,
-                        num_walks=200,
-                        p=1, q=1,
-                        weight_key='weight',
-                        workers=4)
+    # 3. Word2Vec com API NOVA (vector_size) - Corrige o TypeError
+    model = node2vec.fit(
+        vector_size=64,   # Parâmetro correto para Gensim 4.x
+        window=10,
+        min_count=1,
+        sg=1,             # skip-gram
+        batch_words=32,
+        epochs=20
+    )
 
-    # Configuração do modelo Word2Vec
-    w2v_kwargs = dict(window=10, min_count=1, batch_words=4, epochs=20)
-    try:
-        major = int(gensim.__version__.split('.')[0])
-    except Exception:
-        major = 4
-    if major >= 4:
-        w2v_kwargs['vector_size'] = node2vec.dimensions
-    else:
-        w2v_kwargs['size'] = node2vec.dimensions
-
-    model = Word2Vec(node2vec.walks, **w2v_kwargs)
-
-    # Extrai os embeddings
-    embeddings = {}
-    for node in G.nodes():
-        try:
-            embeddings[node] = model.wv[node]
-        except KeyError:
-            # Tenta converter para string, útil se o node for numérico
-            embeddings[node] = model.wv[str(node)]
-
+    # 4. Extrai embeddings
+    embeddings = {node: model.wv[node] for node in G.nodes()}
     embedding_df = pd.DataFrame.from_dict(embeddings, orient='index')
-    embedding_df.index.name = 'Language'
+    embedding_df.index.name = 'Língua'
 
-    # 3. Aplicação do t-SNE para redução de dimensionalidade
+    # 5. t-SNE
     X = embedding_df.values
     language_labels = embedding_df.index.tolist()
-    
-    # Perplexidade deve ser menor que (N-1)
-    perplexity_val = min(5, len(G.nodes()) - 1) 
-    
-    # Se houver menos de 5 nós, ajusta a perplexidade
-    if perplexity_val < 1:
-        perplexity_val = 1 
-    
-    tsne = TSNE(n_components=2, 
-                random_state=42, 
-                perplexity=perplexity_val, 
-                n_iter=5000,
-                init='pca' if len(G.nodes()) > 3 else 'random') # 'pca' é melhor para N>3
-    
+
+    # Perplexity precisa ser menor que (N - 1)
+    perplexity_val = min(5, len(G.nodes()) - 1)
+    if perplexity_val <= 0:
+        return pd.DataFrame()
+
+    tsne = TSNE(
+        n_components=2,
+        perplexity=perplexity_val,
+        random_state=42,
+        n_iter=5000
+    )
+
     X_tsne = tsne.fit_transform(X)
 
-    # 4. Criação do DataFrame final para visualização
-    tsne_df = pd.DataFrame(data = X_tsne, 
-                           columns = ['Componente 1 (t-SNE)', 'Componente 2 (t-SNE)'], 
-                           index=language_labels)
+    tsne_df = pd.DataFrame(
+        X_tsne,
+        columns=['Componente 1 (t-SNE)', 'Componente 2 (t-SNE)'],
+        index=language_labels
+    )
     tsne_df['Língua'] = tsne_df.index
-    
-    # 5. Adicionar uma coluna para o agrupamento visual/linguístico
-    # Pega o mapeamento de Família Linguística da Session State, se existir
-    family_map = st.session_state.get('language_family_map', {})
-    
+
+    # Classificação das famílias com base no input do usuário
     def get_family(lang):
-        if lang in ['Arin', 'Ket', 'Yugh']:
-            return 'Yeniseiana'
-        elif lang in ['Xiongnú', 'Huns']:
-            return 'Xiongnú/Huns (Foco do Artigo)'
-        elif lang in family_map:
-            return family_map[lang]
-        else:
-            return 'Outras Famílias'
-            
+        return family_mapping.get(lang, 'Família Desconhecida')
+
     tsne_df['Família Linguística'] = tsne_df['Língua'].apply(get_family)
-    
+
     return tsne_df
 
 # ----------------------------------------------------------------------
-# 3. LÓGICA DE INPUT (STREAMLIT SESSION STATE)
+# C. INTERFACE DE USUÁRIO (Input)
 # ----------------------------------------------------------------------
 
-# Inicialização do Session State
-if 'base_df' not in st.session_state:
-    st.session_state.base_df = pd.DataFrame(BASE_LANGUAGE_RELATIONS)
-if 'language_family_map' not in st.session_state:
-    st.session_state.language_family_map = {}
-
-def add_new_relation(source, target, weight, family):
-    """Adiciona uma nova linha ao DataFrame de relações e atualiza o mapa de famílias."""
-    if not source or not target or not weight:
-        st.error("Preencha todos os campos da Relação Linguística.")
-        return
-
-    try:
-        weight = int(weight)
-        if weight <= 0:
-            st.error("O Peso deve ser um número inteiro positivo.")
-            return
-    except ValueError:
-        st.error("O Peso deve ser um número inteiro válido.")
-        return
-        
-    new_row = pd.DataFrame([{'Source': source, 'Target': target, 'Weight': weight}])
-    st.session_state.base_df = pd.concat([st.session_state.base_df, new_row], ignore_index=True)
-    
-    # Atualiza o mapa de famílias
-    if source not in ['Arin', 'Ket', 'Yugh', 'Xiongnú', 'Huns', 'Proto-Turkic', 'Proto-Mongolic']:
-        st.session_state.language_family_map[source] = family
-    if target not in ['Arin', 'Ket', 'Yugh', 'Xiongnú', 'Huns', 'Proto-Turkic', 'Proto-Mongolic']:
-        st.session_state.language_family_map[target] = family
-
-def reset_data():
-    """Reseta o DataFrame de relações para o estado inicial."""
-    st.session_state.base_df = pd.DataFrame(BASE_LANGUAGE_RELATIONS)
-    st.session_state.language_family_map = {}
-
-# ----------------------------------------------------------------------
-# 4. INTERFACE STREAMLIT
-# ----------------------------------------------------------------------
-
-# Título do App
-st.title("👨‍💻 Validação Computacional de Cognatos (Node2Vec + t-SNE)")
-st.subheader("Projeto de IA Aplicada à Linguística Histórica")
-
+st.title("Validação da Hipótese Linguística via Node2Vec (Input Dinâmico) 📊")
 st.markdown("""
-Este aplicativo demonstra a validação computacional da hipótese Yeniseiana-Xiongnú. Use a barra lateral para **adicionar novas relações** e simular o impacto no agrupamento.
+Use a barra lateral para configurar o mapeamento de línguas e edite a tabela abaixo para inserir seus dados de lexemas.
 """)
 
-
-
-## ⚙️ Entrada de Dados (Simulação)
-
-# Sidebar para Input de Dados
+# --- 1. Sidebar Input: Mapeamento Linguagem-Família ---
 with st.sidebar:
-    st.header("➕ Simular Nova Relação")
-    st.markdown("Adicione uma relação de proximidade entre duas línguas.")
+    st.header("⚙️ Configuração de Dados")
+    st.subheader("1. Mapeamento Linguagem - Família")
+    st.markdown("Defina a qual família cada língua pertence. Adicione ou remova linhas conforme necessário.")
     
-    with st.form("new_relation_form"):
-        # Inputs para a nova aresta
-        new_source = st.text_input("Língua 1 (Source)", value="Nova Língua", max_chars=30)
-        new_target = st.text_input("Língua 2 (Target)", value="Ket", max_chars=30)
-        new_weight = st.number_input("Força/Peso (1 a 100)", min_value=1, max_value=100, value=50, step=1)
-        new_family = st.text_input("Família Linguística da Nova Língua", value="Simulação", max_chars=30)
-        
-        # Botão de submissão do formulário
-        submit_button = st.form_submit_button("Adicionar Relação e Re-analisar")
-
-    if submit_button:
-        # Chama a função para adicionar ao DataFrame
-        add_new_relation(new_source, new_target, new_weight, new_family)
-        st.success("Nova relação adicionada. Re-executando análise...")
-
-    # Botão de Reset
-    st.button("🔄 Resetar para Dados Iniciais", on_click=reset_data)
+    family_df_default = pd.DataFrame(
+        list(DEFAULT_FAMILY_MAPPING.items()), 
+        columns=['Língua', 'Família Linguística']
+    )
     
-    st.markdown("---")
-    st.info("Para mais detalhes sobre as métricas do Node2Vec, consulte a documentação do projeto.")
+    family_df_input = st.data_editor(
+        family_df_default,
+        key="family_map_editor",
+        num_rows="dynamic",
+        use_container_width=True
+    )
 
-# Executa a análise com os dados atuais
-tsne_results = run_node2vec_analysis(st.session_state.base_df)
+# Processa o mapeamento
+if not family_df_input.empty:
+    family_map = family_df_input.set_index('Língua')['Família Linguística'].to_dict()
+else:
+    st.error("O mapeamento de Linguagem para Família não pode estar vazio.")
+    st.stop()
+    
+LANGUAGES = list(family_map.keys())
 
-## 1. Grafo de Relações (Dados de Entrada)
+# --- 2. Main Input: Lexemas Fonéticos ---
+st.header("1. Análise de Similaridade de Palavras (Feature Engineering)")
+st.markdown("---")
 
-st.header("1. Grafo de Relações (Dados de Entrada Atuais)")
-st.markdown("Tabela de entrada usada na análise (incluindo suas simulações):")
-st.dataframe(st.session_state.base_df, hide_index=True)
-
-
-
-## 2. Prova Computacional: Visualização 2D (t-SNE)
-
-st.header("2. Prova Computacional: Visualização 2D (t-SNE)")
-st.markdown("""
-O algoritmo **Node2Vec** transformou a estrutura do grafo em vetores. O **t-SNE** reduziu esses vetores para 2 dimensões. **Nós próximos no gráfico indicam alta proximidade linguística.**
+st.subheader("1.1 Entrada de Dados: Lexemas Fonéticos (Editável)")
+st.markdown(f"""
+Edite a tabela. As colunas devem incluir o `Conceito` e as **{len(LANGUAGES)}** línguas definidas: {', '.join(LANGUAGES)}.
 """)
 
-if tsne_results is not None:
-    # Criação do gráfico interativo com Plotly
-    fig = px.scatter(tsne_results, 
-                    x='Componente 1 (t-SNE)', 
-                    y='Componente 2 (t-SNE)', 
-                    color='Família Linguística', # Colore pelo agrupamento linguístico
-                    text='Língua',              # Exibe a língua ao passar o mouse
-                    hover_data={'Língua': True, 
-                                'Componente 1 (t-SNE)': ':.2f', 
-                                'Componente 2 (t-SNE)': ':.2f'},
-                    title='Agrupamento de Línguas via Node2Vec e t-SNE')
+words_df_input = st.data_editor(
+    pd.DataFrame(DEFAULT_WORDS_DATA),
+    key="words_data_editor",
+    num_rows="dynamic",
+    use_container_width=True,
+)
 
-    fig.update_traces(textposition='top center', 
-                      marker=dict(size=15, line=dict(width=2, color='DarkSlateGrey')))
-    fig.update_layout(height=600, 
-                      legend_title_text='Família Linguística',
-                      title_x=0.5)
+# Verifica a integridade dos dados antes de prosseguir
+required_columns = set(LANGUAGES)
+available_columns = set(words_df_input.columns)
 
+if not required_columns.issubset(available_columns):
+    missing_cols = required_columns - available_columns
+    st.error(f"Erro: A tabela de Lexemas está faltando as seguintes colunas de Línguas definidas na sidebar: {', '.join(missing_cols)}")
+    st.stop()
+
+# ----------------------------------------------------------------------
+# D. EXECUÇÃO DA ANÁLISE E OUTPUT
+# ----------------------------------------------------------------------
+
+# 1. Geração dos Pesos (Arestas Ponderadas)
+try:
+    languages_df = generate_weighted_edges(words_df_input, LANGUAGES)
+except KeyError as e:
+    st.error(f"Erro na geração de pesos. Verifique se as colunas das línguas na tabela de lexemas correspondem exatamente às línguas definidas na barra lateral. Detalhe do erro: {e}")
+    st.stop()
+
+st.subheader("1.2 Output: Pesos Calculados (Arestas Ponderadas)")
+st.markdown("O valor de `Weight` (Peso) é a pontuação de proximidade de similaridade fonética e é o **input para o Node2Vec**.")
+st.dataframe(languages_df, use_container_width=True)
+
+
+st.header("2. Pipeline de Machine Learning e Prova Geométrica")
+st.markdown("---")
+
+# 2. Executa a Análise Node2Vec + t-SNE
+tsne_results = run_node2vec_analysis(languages_df, family_map)
+
+st.subheader("2.1 Visualização: Agrupamento Node2Vec + t-SNE")
+st.markdown("""
+
+O grafo de dispersão mostra as línguas mapeadas em 2D. A proximidade física reflete a **alta Similaridade de Cosseno** entre os *embeddings* de 64 dimensões.
+""")
+
+if not tsne_results.empty:
+    fig = px.scatter(
+        tsne_results,
+        x='Componente 1 (t-SNE)',
+        y='Componente 2 (t-SNE)',
+        color='Família Linguística',
+        text='Língua',
+        title="Agrupamento de Línguas (Node2Vec Embeddings)",
+        height=600,
+        hover_data=['Língua', 'Família Linguística']
+    )
+    fig.update_traces(textposition='top center')
     st.plotly_chart(fig, use_container_width=True)
-    
-    # Adicionar o Diagrama para Contexto
-    st.markdown("")
-    
-    
-    
-    ## 3. Dados Gerados (Embeddings 2D)
-
-    st.header("3. Dados Gerados (Coordenadas t-SNE)")
-    st.markdown("Coordenadas 2D que definem a posição de cada língua no gráfico, usadas para medir a proximidade:")
-    st.dataframe(tsne_results)
-
-
-    
-    ## 4. Conclusão do Projeto
-
-    st.header("4. Conclusão do Projeto")
-    st.markdown("""
-    O agrupamento visual demonstra a proximidade entre as línguas, validando a hipótese original. **Ao adicionar novas relações, observe como a topologia do grafo (e, consequentemente, a posição 2D) se altera.**
-    """)
-    
-    # Exemplo de como a nova língua se agrupou
-    if st.session_state.language_family_map:
-        new_languages = [lang for lang, family in st.session_state.language_family_map.items()]
-        if new_languages:
-            st.info(f"As línguas simuladas **{', '.join(new_languages)}** foram plotadas com base nas relações que você adicionou. Sua posição no gráfico reflete a força das suas conexões com as línguas existentes, como esperado pelo Node2Vec.")
-
 else:
-    st.error("Análise t-SNE não executada. Certifique-se de ter pelo menos duas línguas relacionadas na tabela de dados.")
+    st.error("Não foi possível gerar resultados t-SNE. O número de línguas pode ser insuficiente.")
+
+st.subheader("2.2 Conclusão do Modelo")
+st.markdown("""
+A análise fornece uma **prova geométrica computacional** da hipótese ao observar o agrupamento das línguas no espaço 2D. 
+O resultado é dinâmico e depende dos seus dados de entrada (lexemas) e do mapeamento de famílias.
+""")
