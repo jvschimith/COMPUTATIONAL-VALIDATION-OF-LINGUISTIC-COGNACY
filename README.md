@@ -1,63 +1,77 @@
-# COMPUTATIONAL-VALIDATION-OF-LINGUISTIC-COGNACY
+# **COMPUTATIONAL VALIDATION OF LINGUISTIC COGNACY**
 
-The linguistic affiliation of the ancient Xiongnú and Huns remains a subject of debate in historical linguistics, with hypotheses spanning Turkic, Mongolic, and Yeniseian families. This project leverages **Graph Machine Learning (ML)** to computationally validate the recent hypothesis proposed by Bonmann and Fries {Bonmann2025Xiongnu}, suggesting a direct linguistic link between the Xiongnú/Huns and the Paleo-Siberian Yeniseian language family (specifically, Arin). By constructing a **weighted graph** where nodes represent languages and edge weights quantify shared cognates, we apply the **Node2Vec** graph embedding algorithm {Grover2016Node2Vec}. Subsequent visualization using **t-distributed Stochastic Neighbor Embedding (t-SNE)** {VanDerMaaten2008TSNE} demonstrates that the Xiongnú and Huns nodes cluster tightly with the Yeniseian languages (Arin, Ket, Yugh), providing a quantitative, geometry-based confirmation of the linguistic proximity established via the traditional comparative method
+The linguistic affiliation of the ancient Xiongnú and Huns remains a subject of debate in historical linguistics, with hypotheses spanning the Turkic, Mongolic, and Yeniseian families. This project leverages **Graph Machine Learning (ML)** to computationally validate the recent hypothesis proposed by Bonmann and Fries {Bonmann2025Xiongnu}, suggesting a direct linguistic link between the Xiongnú/Huns and the Paleo-Siberian Yeniseian language family (specifically Arin). By constructing a **weighted graph** where nodes represent languages and edge weights quantify shared cognates, we apply the **Node2Vec** graph embedding algorithm {Grover2016Node2Vec}. Subsequent visualization using **t-distributed Stochastic Neighbor Embedding (t-SNE)** {VanDerMaaten2008TSNE} shows that the Xiongnú and Huns nodes cluster tightly with the Yeniseian languages (Arin, Ket, Yugh), providing a quantitative, geometry-based confirmation of the linguistic proximity established by the traditional comparative method.
 
+**How to run:**
 
-How to run:
+```
 streamlit run ./app.py
-
-### • O Problema (The Problem)
-
-**Problema Linguístico:** A afiliação genética das línguas dos antigos **Xiongnú** e **Hunos** é uma questão central e controversa na linguística histórica, com hipóteses conflitantes (túrquica, mongólica, ieniseiana). O método comparativo tradicional é rigoroso, mas manual.
-
-**Objetivo do Projeto:** Fornecer uma **validação computacional e quantitativa** para a tese apresentada no artigo de Bonmann e Fries \cite{Bonmann2025Xiongnu}, que sugere que Xiongnú e Hunos falavam uma forma antiga da língua **Arin** (da família Ieniseiana), usando técnicas modernas de Aprendizagem de Máquina em Grafos (Graph ML).
+```
 
 ---
 
-### • O Dataset Utilizado (The Dataset)
+## • The Problem
 
-* **Fonte:** Dados de cognatos e correspondências sonoras extraídos das tabelas comparativas do artigo "Linguistic Evidence Suggests that Xiongnú and Huns Spoke the Same Paleo-Siberian Language" (Bonmann & Fries, 2025).
-* **Formato:** O *dataset* foi estruturado como uma **Lista de Arestas Ponderadas (Weighted Edge List)**.
-* **Entidades (Nós):** As línguas analisadas, incluindo **Arin, Ket, Yugh** (Ieniseianas), **Xiongnú, Huns** (foco do estudo), **Proto-Turkic** e **Proto-Mongolic**.
-* **Relações (Pesos):** O peso de cada aresta entre duas línguas representa a **proximidade linguística**, inferida a partir do número de cognatos compartilhados ou da força das correspondências sonoras regulares.
+**Linguistic Problem:**
+The genetic affiliation of the languages of the ancient **Xiongnú** and **Huns** is a central and controversial question in historical linguistics, with conflicting hypotheses (Turkic, Mongolic, Yeniseian). The traditional comparative method is rigorous but manual.
 
----
-
-### • A Técnica Aplicada (The Technique Applied)
-
-| Etapa | Técnica | Descrição |
-| :--- | :--- | :--- |
-| **Modelagem** | **Grafo (NetworkX)** | Modelar as línguas como **nós** e as relações de cognatos como **arestas ponderadas** (peso = proximidade). |
-| **Aprendizagem** | **Node2Vec (Graph Embedding)** \cite{Grover2016Node2Vec} | Algoritmo de Aprendizagem de Máquina Não Supervisionada que realiza *passeios aleatórios enviesados* no grafo para gerar um vetor numérico (embedding) de 64 dimensões para cada língua. O objetivo é que a **similaridade vetorial** reflita a **proximidade estrutural** no grafo. |
-| **Visualização** | **t-SNE (t-distributed Stochastic Neighbor Embedding)** \cite{VanDerMaaten2008TSNE} | Técnica de redução de dimensionalidade para mapear os 64 *embeddings* em apenas duas dimensões (2D) para visualização. Preserva a estrutura de agrupamento dos dados no espaço geométrico. |
-| **** | | |
+**Project Goal:**
+To provide a **computational and quantitative validation** for the thesis proposed in the article by Bonmann and Fries \cite{Bonmann2025Xiongnu}, which suggests that Xiongnú and Huns spoke an ancient form of the **Arin** language (from the Yeniseian family), using modern Graph Machine Learning (Graph ML) techniques.
 
 ---
 
-### • Métricas de Desempenho (Performance Metrics)
+## • The Dataset Used
 
-Como este é um projeto de **Aprendizagem Não Supervisionada** (representação de dados) em vez de um modelo preditivo, as métricas avaliam a coerência da representação:
-
-1.  **Validação Visual (t-SNE):** A métrica primária é a **coerência do agrupamento**. O sucesso é medido pela clara separação das famílias (ex: Ieniseiana vs. Túrquica) e pelo **agrupamento imediato dos nós Xiongnú e Huns** junto ao cluster Ieniseiano (Arin/Ket), provando a proximidade.
-2.  **Similaridade de Cosseno (Cosine Similarity):** Usada para quantificar a distância entre os vetores de *embedding*.
-    * **Meta de Sucesso:** Alta similaridade (próxima a 1.0) entre (Arin, Ket, Xiongnú, Huns).
-    * **Resultado Típico:** Similaridade > 0.95 entre Xiongnú e Arin, e baixa similaridade (ex: < 0.5) com línguas distantes (ex: Proto-Turkic).
+* **Source:** Cognate and sound-correspondence data extracted from the comparative tables in *“Linguistic Evidence Suggests that Xiongnú and Huns Spoke the Same Paleo-Siberian Language”* (Bonmann & Fries, 2025).
+* **Format:** The dataset was structured as a **Weighted Edge List**.
+* **Entities (Nodes):** The analyzed languages, including **Arin, Ket, Yugh** (Yeniseian), **Xiongnú, Huns** (focus of the study), **Proto-Turkic**, and **Proto-Mongolic**.
+* **Relations (Weights):** The weight of each edge between two languages represents **linguistic proximity**, inferred from the number of shared cognates or the strength of regular sound correspondences.
 
 ---
 
-### • Demonstração do Streamlit (Streamlit Demonstration)
+## • The Technique Applied
 
-O projeto foi empacotado em um aplicativo **Streamlit** para permitir que o professor e os colegas explorem os resultados de forma interativa.
-
-* **Funcionalidade:** O aplicativo exibe a tabela de entrada (relações de cognatos) e, em seguida, o **Gráfico de Dispersão 2D interativo** gerado pelo Node2Vec + t-SNE (usando Plotly).
-* **Interatividade:** O usuário pode passar o mouse sobre os pontos para identificar a língua e fazer *zoom* nas áreas de interesse para examinar a proximidade exata entre Xiongnú/Huns e as línguas Ieniseianas.
+| Step              | Technique                                                | Description                                                                                                                                                                                                                                            |
+| :---------------- | :------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Modeling**      | **Graph (NetworkX)**                                     | Languages are modeled as **nodes**, and cognate relations as **weighted edges** (weight = proximity).                                                                                                                                                  |
+| **Learning**      | **Node2Vec (Graph Embedding)** \cite{Grover2016Node2Vec} | An unsupervised ML algorithm that performs **biased random walks** on the graph to generate a 64-dimensional numerical vector (*embedding*) for each language. The goal is for **vector similarity** to reflect **structural proximity** in the graph. |
+| **Visualization** | **t-SNE** \cite{VanDerMaaten2008TSNE}                    | Dimensionality-reduction technique mapping the 64-dimensional embeddings into a 2D plane. Preserves cluster structure for visual interpretation.                                                                                                       |
+|                   |                                                          |                                                                                                                                                                                                                                                        |
 
 ---
 
-### • Limitações e Possibilidades Futuras (Limitations and Future Work)
+## • Performance Metrics
 
-| Categoria | Limitações | Possibilidades Futuras |
-| :--- | :--- | :--- |
-| **Dados** | Dependência de um *dataset* simulado (extraído manualmente) e relativamente pequeno. | Automatizar a extração de dados tabulares de PDFs linguísticos e expandir o *dataset* para incluir mais famílias (ex: Uralo-Siberiana). |
-| **Método** | Node2Vec é um modelo de Aprendizagem de Representação (Não Supervisionada). | Aplicar **Redes Neurais de Grafo (GNNs)** para um problema de **Classificação de Arestas** (Aprendizagem Supervisionada), treinando o modelo para *prever* se uma relação é um cognato, empréstimo ou coincidência. |
-| **Validação** | O resultado apenas *corrobora* a tese linguística (validando a estrutura de proximidade). | Incluir características fonéticas (`features`) dos lexemas (além da estrutura do grafo) para um modelo mais rico, como GCNs (Graph Convolutional Networks). |
+Because this is an **Unsupervised Learning** project (data representation) rather than a predictive model, the metrics evaluate representational coherence:
+
+1. **Visual Validation (t-SNE):**
+   The primary metric is **cluster coherence**. Success is measured by clear separation between families (e.g., Yeniseian vs. Turkic) and the **tight clustering of Xiongnú and Huns** within the Yeniseian group (Arin/Ket), demonstrating proximity.
+
+2. **Cosine Similarity:**
+   Used to quantify the distance between embedding vectors.
+
+   * **Success Goal:** High similarity (close to 1.0) among (Arin, Ket, Xiongnú, Huns).
+   * **Typical Result:** Similarity > 0.95 between Xiongnú and Arin, and low similarity (e.g., < 0.5) with distant languages (e.g., Proto-Turkic).
+
+---
+
+## • Streamlit Demonstration
+
+The project is deployed as a **Streamlit** application for interactive exploration by the professor and colleagues.
+
+* **Functionality:**
+  The app displays the input table (cognate relations) and, afterward, the **interactive 2D scatter-plot** generated by Node2Vec + t-SNE (using Plotly).
+
+* **Interactivity:**
+  Users can hover over points to see language labels and zoom into clusters to inspect the exact proximity between Xiongnú/Huns and Yeniseian languages.
+
+---
+
+## • Limitations and Future Work
+
+| Category       | Limitations                                                                               | Future Work                                                                                                                                                                               |
+| :------------- | :---------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Data**       | Dependence on a manually extracted dataset, relatively small in size.                     | Automate extraction of tabular data from linguistic PDFs and expand to more families (e.g., Uralo-Siberian).                                                                              |
+| **Method**     | Node2Vec is an unsupervised representation-learning model.                                | Apply **Graph Neural Networks (GNNs)** to an **edge-classification** problem (supervised), training the model to *predict* whether a relation is a cognate, a loanword, or a coincidence. |
+| **Validation** | The result only *corroborates* the linguistic hypothesis (validates proximity structure). | Add phonetic features of lexemes (beyond graph structure) to create richer models, such as GCNs (Graph Convolutional Networks).                                                           |
+
